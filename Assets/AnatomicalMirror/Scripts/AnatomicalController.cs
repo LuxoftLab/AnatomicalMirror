@@ -1,11 +1,22 @@
 ﻿namespace AnatomicalMirror {
     using UnityEngine;
+    using System.Collections.Generic;
 
     public class AnatomicalController : MonoBehaviour {
         public SimpleGestureListener gestureListener = null;
 
         public int currentModelIdx;
         public GameObject[] models;
+        public List<SkinnedMeshRenderer>[] smRenderers;
+
+        void Awake() {
+            smRenderers = new List<SkinnedMeshRenderer>[models.Length];
+            for(int i = 0; i < models.Length; ++i) {
+                var renderers = models[i].GetComponentsInChildren<SkinnedMeshRenderer>();
+                smRenderers[i] = new List<SkinnedMeshRenderer>(renderers);
+            }
+
+        }
 
         void Start() {
             if(gestureListener == null) {
