@@ -1,21 +1,39 @@
 ﻿namespace AnatomicalMirror {
     using UnityEngine;
     using System.Collections.Generic;
+    using System.Collections;
+
+    [System.Serializable]
+    public class ModelDescription {
+        public GameObject goModel;
+        public List<Material> materials;
+    }
+
+    public enum BlendMode {
+        Opaque,
+        Cutout,
+        Fade,
+        Transparent
+    }
 
     public class AnatomicalController : MonoBehaviour {
         public SimpleGestureListener gestureListener = null;
-
+        public ModelDescription[] models;
         public int currentModelIdx;
-        public GameObject[] models;
-        public List<SkinnedMeshRenderer>[] smRenderers;
+        protected int? lastModelidx = null;
+        //public List<ModelDescription> materials;
 
         void Awake() {
-            smRenderers = new List<SkinnedMeshRenderer>[models.Length];
             for(int i = 0; i < models.Length; ++i) {
-                var renderers = models[i].GetComponentsInChildren<SkinnedMeshRenderer>();
-                smRenderers[i] = new List<SkinnedMeshRenderer>(renderers);
+                if(i == currentModelIdx) {
+                    continue;
+                }
+                for(int j = 0; j < models[i].materials.Count; ++j) {
+                    Color c = models[i].materials[j].color;
+                    c.a = 0;
+                    models[i].materials[j].color = c;
+                }
             }
-
         }
 
         void Start() {
@@ -33,17 +51,115 @@
                 currentModelIdx = 0;
             }
             for(int i = 0; i < models.Length; ++i) {
-                models[i].SetActive(currentModelIdx == i);
+                if(currentModelIdx == i) {
+                    StartCoroutine(ShowModel(models[i]));
+                } else {
+                    StartCoroutine(FadeModel(models[i]));
+                }
             }
             gestureListener.SetGestureDetectCallback(GestureDetected);
         }
 
         protected void NextModel() {
-            models[currentModelIdx].SetActive(false);
+            StartCoroutine(FadeModel(models[currentModelIdx]));
             if(++currentModelIdx == models.Length) {
                 currentModelIdx = 0;
             }
-            models[currentModelIdx].SetActive(true);
+            StartCoroutine(ShowModel(models[currentModelIdx]));
+        }
+
+        public static void SetShaderBlendMode(BlendMode blendMode, ref Material material) {
+            switch (blendMode) {
+                case BlendMode.Opaque:
+                    material.SetFloat("_Mode", (float)BlendMode.Opaque);
+                    material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                    material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+                    material.SetInt("_ZWrite", 1);
+                    material.DisableKeyword("_ALPHATEST_ON");
+                    material.DisableKeyword("_ALPHABLEND_ON");
+                    material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    material.renderQueue = -1;
+                    break;
+                case BlendMode.Cutout:
+                    material.SetFloat("_Mode", (float)BlendMode.Cutout);
+                    material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                    material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+                    material.SetInt("_ZWrite", 1);
+                    material.EnableKeyword("_ALPHATEST_ON");
+                    material.DisableKeyword("_ALPHABLEND_ON");
+                    material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    material.renderQueue = 2450;
+                    break;
+                case BlendMode.Fade:
+                    material.SetFloat("_Mode", (float)BlendMode.Fade);
+                    material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    material.SetInt("_ZWrite", 0);
+                    material.DisableKeyword("_ALPHATEST_ON");
+                    material.EnableKeyword("_ALPHABLEND_ON");
+                    material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    material.renderQueue = 3000;
+                    break;
+                case BlendMode.Transparent:
+                    material.SetFloat("_Mode", (float)BlendMode.Transparent);
+                    material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                    material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    material.SetInt("_ZWrite", 0);
+                    material.DisableKeyword("_ALPHATEST_ON");
+                    material.DisableKeyword("_ALPHABLEND_ON");
+                    material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+                    material.renderQueue = 3000;
+                    break;
+            }
+
+        }
+
+        public IEnumerator FadeModel(ModelDescription model) {
+            for (int i = 0; i < model.materials.Count; ++i) {
+                var mat = model.materials[i];
+                SetShaderBlendMode(BlendMode.Fade, ref mat);
+                model.materials[i] = mat;
+                //model.materials[i].SetFloat("_Mode", (float)BlendMode.Fade);
+            }
+            for (float f = 1f; f > 0f; f -= 0.1f) {
+                for(int j = 0; j < model.materials.Count; ++j) {
+                    Color c = model.materials[j].color;
+                    c.a = f;
+                    if (c.a < f || f < 0f) {
+                        c.a = 0f;
+                        f = -0.1f;
+                    }
+                    model.materials[j].SetColor("_Color", c);
+                }
+                yield return new WaitForSeconds(.1f);
+            }
+        }
+
+        public IEnumerator ShowModel(ModelDescription model) {
+            for (int i = 0; i < model.materials.Count; ++i) {
+                var mat = model.materials[i];
+                SetShaderBlendMode(BlendMode.Fade, ref mat);
+                model.materials[i] = mat;
+                Color c = model.materials[i].color;
+                c.a = 0f;
+                model.materials[i].SetColor("_Color", c);
+            }
+            for (float f = 0f; f < 1f; f += 0.1f) {
+                for (int j = 0; j < model.materials.Count; ++j) {
+                    Color c = model.materials[j].color;
+                    c.a = f;
+                    model.materials[j].SetColor("_Color", c);
+                }
+                yield return new WaitForSeconds(.1f);
+            }
+            for (int i = 0; i < model.materials.Count; ++i) {              
+                Color c = model.materials[i].color;
+                c.a = 1f;
+                model.materials[i].SetColor("_Color", c);
+                var mat = model.materials[i];
+                SetShaderBlendMode(BlendMode.Opaque, ref mat);
+                model.materials[i] = mat;
+            }
         }
 
         protected void SquatDetected() {
