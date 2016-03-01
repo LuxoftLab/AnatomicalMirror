@@ -7,6 +7,7 @@
     public class ModelDescription {
         public GameObject goModel;
         public List<Material> materials;
+        public Transform motionRoot;
     }
 
     public enum BlendMode {
@@ -21,7 +22,6 @@
         public ModelDescription[] models;
         public int currentModelIdx;
         protected int? lastModelidx = null;
-        //public List<ModelDescription> materials;
 
         void Awake() {
             for(int i = 0; i < models.Length; ++i) {
@@ -58,6 +58,19 @@
                 }
             }
             gestureListener.SetGestureDetectCallback(GestureDetected);
+        }
+
+        void Update() {
+            Vector3 curPos = models[currentModelIdx].motionRoot.localPosition;
+            if (curPos.z >= 0.5f && currentModelIdx != 1) {
+                StartCoroutine(FadeModel(models[currentModelIdx]));
+                currentModelIdx = 1;
+                StartCoroutine(ShowModel(models[currentModelIdx]));
+            } else if (curPos.z < 0.5f && currentModelIdx != 0) {
+                StartCoroutine(FadeModel(models[currentModelIdx]));
+                currentModelIdx = 0;
+                StartCoroutine(ShowModel(models[currentModelIdx]));
+            }
         }
 
         protected void NextModel() {
@@ -119,19 +132,19 @@
                 var mat = model.materials[i];
                 SetShaderBlendMode(BlendMode.Fade, ref mat);
                 model.materials[i] = mat;
-                //model.materials[i].SetFloat("_Mode", (float)BlendMode.Fade);
             }
-            for (float f = 1f; f > 0f; f -= 0.1f) {
+            for (float f = 1f; f > 0f; f -= 0.2f) {
                 for(int j = 0; j < model.materials.Count; ++j) {
                     Color c = model.materials[j].color;
                     c.a = f;
-                    if (c.a < f || f < 0f) {
-                        c.a = 0f;
-                        f = -0.1f;
-                    }
                     model.materials[j].SetColor("_Color", c);
                 }
                 yield return new WaitForSeconds(.1f);
+            }
+            for (int j = 0; j < model.materials.Count; ++j) {
+                Color c = model.materials[j].color;
+                c.a = 0f;
+                model.materials[j].SetColor("_Color", c);
             }
         }
 
@@ -144,7 +157,7 @@
                 c.a = 0f;
                 model.materials[i].SetColor("_Color", c);
             }
-            for (float f = 0f; f < 1f; f += 0.1f) {
+            for (float f = 0f; f < 1f; f += 0.2f) {
                 for (int j = 0; j < model.materials.Count; ++j) {
                     Color c = model.materials[j].color;
                     c.a = f;
@@ -170,7 +183,7 @@
         public void GestureDetected(KinectGestures.Gestures gesture) {
             switch(gesture) {
                 case KinectGestures.Gestures.Squat:
-                    SquatDetected();
+                    //SquatDetected();
                     break;
                 default:
                     Debug.Log("Gesture handler is missing: " + gesture);
